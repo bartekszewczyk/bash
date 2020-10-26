@@ -1,155 +1,524 @@
 #!/bin/bash
-#---------------------------------------------------------------------------
-# Autor: Bartosz Szewczyk
+#-----------------------------------------------------------------------
+# Author: Bartosz Szewczyk
 # Data: 13/10/2020
-#---------------------------------------------------------------------------
-# Wlacza konkretne hosty w klastrze, w zaleznosci od wybranej opcji
-#---------------------------------------------------------------------------
+#-----------------------------------------------------------------------
+# WakeOnLan - "Simple" start/stop hosts program
+#-----------------------------------------------------------------------
 
-#----------------------------
-# Animacja podczas czekania
-#----------------------------
-spinner() {
-spin() {
+
+#-----------------------------------------------------------------------
+# DATA
+#-----------------------------------------------------------------------
+# MASTERS
+declare -A IP_MASTER                  ; declare -a orderIP_MASTER
+IP_MASTER["master1"]="10.4.8.116"     ; orderIP_MASTER+=( "master1" )
+IP_MASTER["master2"]="10.4.8.117"     ; orderIP_MASTER+=( "master2" )
+
+# HOSTS
+declare -A IP                  ; declare -a orderIP
+IP["ubuntu101"]="10.4.8.101"   ; orderIP+=( "ubuntu101" )
+IP["ubuntu102"]="10.4.8.102"   ; orderIP+=( "ubuntu102" )
+IP["ubuntu103"]="10.4.8.103"   ; orderIP+=( "ubuntu103" )
+IP["ubuntu104"]="10.4.8.104"   ; orderIP+=( "ubuntu104" )
+IP["ubuntu105"]="10.4.8.105"   ; orderIP+=( "ubuntu105" )
+IP["ubuntu106"]="10.4.8.106"   ; orderIP+=( "ubuntu106" )
+IP["ubuntu107"]="10.4.8.107"   ; orderIP+=( "ubuntu107" )
+IP["ubuntu108"]="10.4.8.108"   ; orderIP+=( "ubuntu108" )
+IP["ubuntu109"]="10.4.8.109"   ; orderIP+=( "ubuntu109" )
+IP["ubuntu110"]="10.4.8.110"   ; orderIP+=( "ubuntu110" )
+IP["ubuntu111"]="10.4.8.111"   ; orderIP+=( "ubuntu111" )
+IP["ubuntu112"]="10.4.8.112"   ; orderIP+=( "ubuntu112" )
+IP["ubuntu113"]="10.4.8.113"   ; orderIP+=( "ubuntu113" )
+IP["ubuntu114"]="10.4.8.114"   ; orderIP+=( "ubuntu114" )
+
+# MASTERS
+declare -A MAC_MASTER
+MAC_MASTER["master1"]="44:a8:42:48:14:57"
+MAC_MASTER["master2"]="44:a8:42:48:14:15"
+
+declare -A MAC
+# HOSTS
+MAC["ubuntu101"]="44:a8:42:42:a9:0a"
+MAC["ubuntu102"]="44:a8:42:42:a6:52"
+MAC["ubuntu103"]="44:a8:42:42:af:32"
+MAC["ubuntu104"]="44:a8:42:42:a8:76"
+MAC["ubuntu105"]="44:a8:42:42:a7:fe"
+MAC["ubuntu106"]="44:a8:42:42:a8:16"
+MAC["ubuntu107"]="44:a8:42:42:aa:fb"
+MAC["ubuntu108"]="44:a8:42:42:ae:21"
+MAC["ubuntu109"]="44:a8:42:42:a0:62"
+MAC["ubuntu110"]="44:a8:42:42:a4:dc"
+MAC["ubuntu111"]="44:a8:42:42:a8:f6"
+MAC["ubuntu112"]="44:a8:42:42:a9:02"
+MAC["ubuntu113"]="44:a8:42:42:a8:92"
+MAC["ubuntu114"]="44:a8:42:42:a0:a6"
+
+
+#-----------------------------------------------------------------------
+# VARIABLES
+#-----------------------------------------------------------------------
+# Logo special characters
+bs="\e[100m"
+be="\e[49m"
+cs="\e[30m"
+ce="\e[39m"
+# Displays prompt
+color_prompt="\e[92;1mwakeonlan\e[39;0m:\e[94m~\e[39m$ "
+prompt="echo -e -n $color_prompt"
+# Color status
+online="\e[42mONLINE\e[49m"
+offline="\e[41mOFFLINE\e[49m"
+# USER to HOST and MASTERS
+USER="lsm"
+
+
+#-----------------------------------------------------------------------
+# LOGO
+#-----------------------------------------------------------------------
+# Displays main logo
+logo_antenna="$cs█$ce        $cs█$ce"
+logo_upper_border="$cs◼ ◼ ◼ ◼ ◼$ce"
+logo_lower_border="$cs◼ ◼ ◼ ◼ ◼$ce"
+logo_wakeonlan="\e[2mWakeOnLan\e[0m"
+text_main="$cs$ce\e[2m  « 'Simple' start/stop hosts program »\e[0m"
+text_copy="\e[2m« 2020 © Bartosz Szewczyk » \e[0m"
+text_start="$cs$ce\e[2m  « Uses wakeonlan package by IP and MAC »\e[0m"
+text_stop="$cs$ce\e[2m  « Uses ssh to host with shutdown command »\e[0m"
+text_check="$cs$ce\e[2m  « Ping hosts by IP »\e[0m"
+
+function display_logo {
+  clear
+    local b1=$1
+    local b2=$2
+    local t1=$3
+    local t2=$4
+      echo -e "                                                "
+      echo -e "      $cs█$ce $b2 $cs█$ce                                   "
+      echo -e "      $cs◼$ce $logo_wakeonlan $cs◼$ce    $t1    "
+      echo -e "        $logo_lower_border                 $t2  "
+      echo -e "                                                "
+}
+
+#-----------------------------------------------------------------------
+# FUNCTIONS
+#-----------------------------------------------------------------------
+# Just a spinner animation while waiting
+function spinner {
+ function spin {
   local -r pid="${1}"
   local -r delay='0.1'
   local spinstr='/-\|'
   local temp
-  while ps a | awk '{print $1}' | grep -q "${pid}"; do
+   while ps a | awk '{print $1}' | grep -q "${pid}"; do
     temp="${spinstr#?}"
     printf " [%c]  " "${spinstr}"
     spinstr=${temp}${spinstr%"${temp}"}
     sleep "${delay}"
     printf "\b\b\b\b\b\b"
-  done
+   done
   printf "    \b\b\b\b \n"
+ }
+ ("$@") &
+ printf ""
+ spin "$!"
 }
-("$@") &
-printf ""
-spin "$!"
+# Displays when task is done
+function say_task_done {
+  echo ""
+  echo "    Done! "
+  echo "" ; sleep 1.5
 }
-#----------------------------
-
-#------------------
-# Tytul aplikacji
-#------------------
-logo() {
-clear
-local prompt="   >"
-
-    printf "\n"
-    printf "\t___________\n\n"
-    printf "\t WakeOnLan \n"
-    printf "\t___________\n"
-    printf "\n"
-
-PS3="$prompt "
+# Displays warning when user chose wrong
+function say_wrong_option {
+  echo ""
+  echo -n "    Please enter available option!" ; sleep 1
 }
-#------------------
+# Displays Bye! text
+function say_bye {
+  echo -n "Bye!" ; echo "" ; sleep 0.5 ; exit
+}
 
-#-----------------
-# Funkcja glowna
-#-----------------
-wol() {
-logo
 
-# Wszystkie adresy MAC hostow
-declare -A hosty=( [ubuntu101]=44:a8:42:42:a9:0a [ubuntu102]=44:a8:42:42:a6:52
-                   [ubuntu103]=44:a8:42:42:af:32 [ubuntu104]=44:a8:42:42:a8:76
-                   [ubuntu105]=44:a8:42:42:a7:fe [ubuntu106]=44:a8:42:42:a8:16
-                   [ubuntu107]=44:a8:42:42:aa:fb [ubuntu108]=44:a8:42:42:ae:21
-                   [ubuntu109]=44:a8:42:42:a0:62 [ubuntu110]=44:a8:42:42:a4:dc
-                   [ubuntu111]=44:a8:42:42:a8:f6 [ubuntu112]=44:a8:42:42:a9:02
-                   [ubuntu113]=44:a8:42:42:a8:92 [ubuntu114]=44:a8:42:42:a0:a6 )
-# ubuntu109 wylaczony - grzeje sie do 95 stopni pod obciazeniem!!
-# [ubuntu109]=44:a8:42:42:a0:62
+#-----------------------------------------------------------------------
+# CHECK MENU
+#-----------------------------------------------------------------------
+# Check menu with logic
+function menu_check_host {
+  display_logo " " "$text_check" " "
+  local option=0
+    echo "  1. CHECK ALL hosts and masters!"
+    echo "  2. CHECK hosts till ALL active"
+    echo "  3. # TODO"
+    echo ""
+    echo "  6. Back"
+    echo "  7. Exit"
+    echo ""
+    echo "    (Please enter 1-3)"
+    echo ""
+    $prompt
+    read option
+    echo ""
 
-# Adresy MAC hostow 1-7
-declare -a hosty1=( 44:a8:42:42:a9:0a 44:a8:42:42:a6:52
-                    44:a8:42:42:af:32 44:a8:42:42:a8:76
-                    44:a8:42:42:a7:fe 44:a8:42:42:a8:16
-                    44:a8:42:42:aa:fb )
-# Adresy MAC hostow 7-14
-declare -a hosty2=( 44:a8:42:42:ae:21 44:a8:42:42:a0:62
-                    44:a8:42:42:a4:dc 44:a8:42:42:a8:f6
-                    44:a8:42:42:a9:02 44:a8:42:42:a8:92
-                    44:a8:42:42:a0:a6 )
+  function pingit {
+    local ip=$1
+    ping_output=`timeout 0.2 ping -c1 -w1 $ip &> /dev/null && echo $?`
+  }
 
-declare -a menu=( "Wlacz WSZYSTKIE hosty w klastrze!       "
-                  "Wlacz hosty 1-7                         "
-                  "Wlacz hosty 7-14                        "
-                  "Wlacz hosta ubuntu..    [101-114]       "
-                  "Wyjdz                                   " )
+  function status {
+    local hostname=$1
+    local status=$2
+    local print=`echo -e "$hostname $status" | tr -s '\t' ' '`
+      echo "$print"
+  }
 
-select y in "${menu[@]}"
- do
-  case $y in
+  function display_instruction_ping {
+    echo ""
+    echo "    (Press enter to continue) "
+    echo ""
+    $prompt
+    read input && menu_check_host
+}
 
-    "${menu[0]}")
+# Sets array with host status online/offline
+declare -A ACTIVE;
 
-  for i in ${hosty[@]}
-    do
-      printf "\n\t Wlaczam WSZYSTKIE hosty w klastrze! \n" ; spinner sleep 3
-      /usr/bin/wakeonlan $i > /dev/null 2>&1
-      printf "\t Zrobione! \n\n" ; sleep 0.5
-      exit
+# Ping hosts and gives online/offline status
+function check_host {
+    for no in "${!orderIP[@]}"; do
+      pingit "${orderIP[$no]}"
+      if [[ "$ping_output" == "0" ]] ; then
+        ACTIVE+=([$no]=online)
+        status "${orderIP[$no]}" " $online"
+      else
+        ACTIVE+=([$no]=offline)
+        status "${orderIP[$no]}" " $offline"
+      fi
+    done
+  echo ""
+ }
+
+# Ping masters and gives online/offline status
+ function check_master {
+    for no in "${!orderIP_MASTER[@]}"; do
+      pingit "${orderIP_MASTER[$no]}"
+      if [[ "$ping_output" == "0" ]] ; then
+        ACTIVE+=([$no]=1)
+        status "${orderIP_MASTER[$no]}" " $online"
+      else
+        ACTIVE+=([$no]=0)
+        status "${orderIP_MASTER[$no]}" " $offline"
+      fi
+    done
+  echo ""
+}
+
+# Loop of check_host to ping hosts till ALL with online status
+function check_host_till_active {
+    for i in ${ACTIVE[@]}; do
+      check_host
     done
 
-;;
-
-  "${menu[1]}")
-
-  for i in ${hosty1[@]}
-    do
-      printf "\n\t Wlaczam hosty 1-7 \n" ; spinner sleep 3
-      /usr/bin/wakeonlan $i > /dev/null 2>&1
-      printf "\t Zrobione! \n\n" ; sleep 0.5
-      exit
-    done
+    # TODO - IF HOST UP, STOP AND WRITE COMMENT THEN RETURN TO PING
 
 
-;;
+    echo ""
+  }
 
-  "${menu[2]}")
-
-  for i in ${hosty2[@]}
-    do
-      printf "\n\t Wlaczam hosty 7-14 \n" ; spinner sleep 3
-      /usr/bin/wakeonlan $i > /dev/null 2>&1
-      printf "\t Zrobione! \n\n" ; sleep 0.5
-      exit
-    done
-
-;;
-
-  "${menu[3]}")
-
-    printf "\n"
-    read -p "Podaj nr hosta od 101-114:  " host
-      printf "\n\t Wlaczam ubuntu$host. \n" ; spinner sleep 1
-      /usr/bin/wakeonlan ${hosty[ubuntu$host]} > /dev/null 2>&1
-      printf "\t Zrobione! \n\n" ; sleep 0.5
-    exit
-
-;;
-
-   "${menu[4]}") 
-
-    printf "\n" ;  sleep 0.4 ; exit
-
-;;
-
-   *) printf "\n\nWybierz odpowiednia opcje!\n\n" ; sleep 1 
-
-;;
-
-  esac
- wol
- done
+# Displays instruction
+function display_host_range {
+  local a="${orderIP[0]}"
+  local b="${orderIP[${#orderIP[@]}-1]}"
+  echo ""
+  echo "  6. Back" ; echo ""
+  echo "    (Please enter name of host (eg. $a..$b) "
+  echo ""
 }
-#----------------
 
-wol
+# Displays instruction
+function display_master_range {
+  local a="${orderIP_MASTER[0]}"
+  local b="${orderIP_MASTER[${#orderIP_MASTER[@]}-1]}"
+  echo ""
+  echo "  6. Back" ; echo ""
+  echo "    (Enter enter name of master (eg. $a..$b) "
+  echo ""
+}
+
+# Checks if array contain value
+function contain_value {
+          local e match="$1"
+          shift
+          for e; do [[ "$e" == "$match" ]] && return 1; done
+          return 0
+}
+
+# Functions initialize
+    case $option in
+    1 )   check_host ; check_master ; display_instruction_ping ;;
+    2 )   check_host ; check_master ; check_host_till_active
+          display_instruction_ping ;;
+    6 )   main_menu ;;
+    7 )   say_bye ;;
+    * )   say_wrong_option ; menu_check_host ;;
+    esac
+}
 
 
+#-----------------------------------------------------------------------
+# START MENU
+#-----------------------------------------------------------------------
+# Start menu with functions
+function menu_start_host {
+  display_logo " " "$text_start" " "
+  local option=0
+    echo "  1. START ALL hosts!"
+    echo "  2. START hosts first half"
+    echo "  3. START hosts second half"
+    echo "  4. START host [name]..    (eg. '${orderIP[0]}')"
+    echo "  5. START master [name].. (eg. '${orderIP_MASTER[0]}')"
+    echo ""
+    echo "  6. Back"
+    echo "  7. Exit"
+    echo ""
+    echo "    (Please enter 1-5)"
+    echo ""
+    $prompt
+    read option
+    echo ""
 
+    # Displays starting host
+    function say_start_host {
+        local host=$1
+        echo -n "    Starting $host  " ; spinner sleep 0.2
+    }
+
+    # Uses wakeonlan to send packet on port 9 by ip and mac
+    function start {
+        local ip=$1
+        local mac=$2
+        /usr/bin/wakeonlan -i $ip $mac > /dev/null 2>&1
+    }
+
+    # Uses start function to start all hosts
+    function start_all {
+        for no in "${orderIP[@]}" ; do
+        start "$no" "${MAC[$no]}"
+        say_start_host "$no"
+        done
+      say_task_done
+    }
+
+    # Uses start function to start first half of hosts array
+    function start_first_half {
+        for no in "${orderIP[@]:0:7}" ; do
+        start "$no" "${MAC[$no]}"
+        say_start_host "$no"
+        done
+      say_task_done
+    }
+
+    # Uses start function to start second half of hosts array
+    function start_second_half {
+        for no in "${orderIP[@]:7:13}" ; do
+        start "$no" "${MAC[$no]}"
+        say_start_host "$no"
+        done
+      say_task_done
+    }
+
+    # Reading user input (wich host) and uses start function
+    function choose_host_to_start {
+      display_logo " " "$text_start" " " ; display_host_range
+        $prompt ; read input
+        contain_value "$input" "${orderIP[@]}"
+          if [[ $? == 1 ]] ; then
+          say_start_host "$input"
+          start "$input" "${MAC[$input]}"
+          say_task_done ; menu_start_host
+        elif [[ "$input" == "6" ]] ; then
+          menu_start_host
+        else
+          say_wrong_option
+          choose_host_to_start
+        fi
+    }
+
+    # Reading user input (wich master) and uses start function
+    function choose_master_to_start {
+        display_logo " " "$text_start" " " ; display_master_range
+        $prompt ; read input
+        contain_value "$input" "${orderIP_MASTER[@]}"
+          if [[ $? == 1 ]] ; then
+            say_start_host "$input"
+            start "$input" "${MAC_MASTER[$input]}"
+            say_task_done ; menu_start_host
+          elif [[ "$input" == "6" ]] ; then
+            menu_start_host
+          else
+            say_wrong_option
+            choose_master_to_start
+          fi
+    }
+
+    # Functions initialize
+    case $option in
+    1 )   start_all ; menu_start_host ;;
+    2 )   start_first_half ; menu_start_host ;;
+    3 )   start_second_half ; menu_start_host ;;
+    4 )   choose_host_to_start ; menu_start_host ;;
+    5 )   choose_master_to_start ; menu_start_host ;;
+    6 )   main_menu ;;
+    7 )   say_bye ;;
+    * )   say_wrong_option ; menu_start_host ;;
+    esac
+}
+
+
+#-----------------------------------------------------------------------
+# STOP MENU
+#-----------------------------------------------------------------------
+# Stop menu with logic
+function menu_stop_host {
+  display_logo " " "$text_stop" " "
+  local option=0
+    echo "  1. STOP ALL hosts"
+    echo "  2. STOP hosts first half"
+    echo "  3. STOP hosts second half"
+    echo "  4. STOP host [name].. (eg. '${orderIP[0]}')"
+    echo "  5. STOP master [name].. (eg. '${orderIP_MASTER[0]}')"
+    echo ""
+    echo "  6. Back"
+    echo "  7. Exit"
+    echo ""
+    echo "    (Please enter 1-5)"
+    echo ""
+    $prompt
+    read option
+    echo ""
+
+    # Displays stopping host
+    function say_stop_host {
+      local host=$1
+      echo -n "    Stopping $host  " ; spinner sleep 0.2
+    }
+
+    # Uses ssh to send command to shutdown host
+    function stop {
+      local ip=$1
+      ssh -t USER@$ip 'sudo shutdown now' > /dev/null 2>&1
+    }
+
+    # Uses stop function to stop ALL hosts
+    function stop_all {
+        for no in "${orderIP[@]}" ; do
+
+        # check if online                     # TODO
+        # if [[ "$ping_output" == "0" ]] ; then
+
+        stop "${IP[$no]}"
+        say_stop_host "$no"
+        done
+      say_task_done
+    }
+
+    # Uses stop function to stop first half of hosts array
+    function stop_first_half {
+        for no in "${orderIP[@]:0:7}" ; do
+        stop "${IP[$no]}"
+        say_stop_host "$no"
+        done
+      say_task_done
+    }
+
+    # Uses stop function to stop second half of hosts array
+    function stop_second_half {
+        for no in "${orderIP[@]:7:13}" ; do
+        stop "${IP[$no]}"
+        say_stop_host "$no"
+        done
+      say_task_done
+    }
+
+    # Reading user input (wich host) and uses stop function
+    function choose_host_to_stop {
+      display_logo " " "$text_stop" " " ; display_host_range
+        $prompt ; read input
+        contain_value "$input" "${orderIP[@]}"
+          if [[ $? == 1 ]] ; then
+          say_stop_host "$input"
+          echo stop "${IP[$input]}"
+          say_task_done ; menu_stop_host
+        elif [[ "$input" == "6" ]] ; then
+          menu_stop_hosts
+        else
+          say_wrong_option
+          choose_host_to_stop
+        fi
+    }
+
+    # Reading user input (wich master) and uses stop function
+    function choose_master_to_stop {
+      display_logo " " "$text_stop" " " ; display_master_range
+        $prompt ; read input
+        contain_value "$input" "${orderIP_MASTER[@]}"
+          if [[ $? == 1 ]] ; then
+          say_stop_host "$input"
+          stop "${IP_MASTER[$input]}"
+          say_task_done ; menu_stop_host
+        elif [[ "$input" == "6" ]] ; then
+          menu_stop_hosts
+        else
+          say_wrong_option
+          choose_master_to_stop
+        fi
+    }
+
+    # Functions initialize
+    case $option in
+    1 )   stop_all ; menu_stop_host ;;
+    2 )   stop_first_half ; menu_stop_host ;;
+    3 )   stop_second_half ; menu_stop_host ;;
+    4 )   choose_host_to_stop ; menu_stop_host ;;
+    5 )   choose_master_to_stop ; menu_stop_host ;;
+    6 )   sleep 0.1 ; main_menu ;;
+    7 )   say_bye ;;
+    * )   say_wrong_option ; menu_stop_host ;;
+    esac
+}
+
+
+#-----------------------------------------------------------------------
+# MAIN MENU
+#-----------------------------------------------------------------------
+# Displays main logo and menu with all options available
+function main_menu {
+  display_logo "$logo_antenna" "$logo_upper_border" "$text_main" "$text_copy"
+   local option=0
+     echo "  1. START hosts"
+     echo "  2. STOP hosts"
+     echo "  3. CHECK hosts"
+     echo ""
+     echo "  7. Exit"
+     echo ""
+     echo "    (Please enter 1-3)"
+     echo ""
+     $prompt
+     read option
+     echo ""
+
+     # Functions initialize
+     case $option in
+       1 ) menu_start_host ;;
+       2 ) menu_stop_host ;;
+       3 ) menu_check_host ;;
+       7 ) say_bye ;;
+       * ) say_wrong_option ; main_menu ;;
+     esac
+}
+
+
+#-----------------------------------------------------------------------
+# PROGRAM START
+#-----------------------------------------------------------------------
+main_menu
